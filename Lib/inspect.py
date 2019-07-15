@@ -1993,23 +1993,79 @@ def _signature_fromstr(cls, obj, s, skip_bound_arg=True):
             module_dict = module.__dict__
     sys_module_dict = sys.modules.copy()
 
+    print("BAR")
+    print("MODULE DICT")
+    print(module_dict.keys())
+    print("SYS MODULE DICT")
+    print(sys_module_dict.keys())
+
     def parse_name(node):
         assert isinstance(node, ast.arg)
+        print("FOOOO")
+        print(str(node))
+        print(repr(node))
+        annotation = empty
         if node.annotation is not None:
-            raise ValueError("Annotations are not currently supported")
-        return node.arg
+            print(str(node.annotation))
+            print(repr(node.annotation))
+            import inspect
+            print(inspect.getmembers(node.annotation))
+            # print(node.annotation.id)
+            # print(inspect.getmembers(ast))
 
-    def wrap_value(s):
+            # START UNPARSE
+            import io
+            import os
+            import test.support
+            from test.test_tools import toolsdir
+            parser_path = os.path.join(toolsdir, "parser")
+            with test.support.DirsOnSysPath(parser_path):
+                import unparse
+            print("UNPARSE (node)")
+            unparse_buffer = io.StringIO()
+            unparse.Unparser(node, unparse_buffer)
+            print(unparse_buffer.getvalue())
+            print("UNPARSE (node.annotation)")
+            unparse_buffer = io.StringIO()
+            unparse.Unparser(node.annotation, unparse_buffer)
+            print(unparse_buffer.getvalue())
+            print(eval(unparse_buffer.getvalue(), module_dict))
+
+            # START COMPILE
+            # print("COMPILE! (node)")
+            # print(compile(node, '<string>', 'single'))
+            # print("COMPILE! (node.annotation)")
+            # print(compile(node.annotation, '<string>', 'single'))
+
+            # START LITERAL EVAL
+            # print("LITERAL EVAL! (node)")
+            # print(ast.literal_eval(node))
+            # print("LITERAL EVAL! (node.annotation)")
+            # print(ast.literal_eval(node.annotation))
+
+            annotation = eval_id(node.annotation.id)
+            print("ANNOTATION: ", annotation)
+            # raise ValueError("Annotations are not currently supported")
+        return node.arg, annotation
+
+    def eval_id(s):
         try:
-            value = eval(s, module_dict)
+            return eval(s, module_dict)
         except NameError:
             try:
-                value = eval(s, sys_module_dict)
+                return eval(s, sys_module_dict)
             except NameError:
                 raise RuntimeError()
 
+    def wrap_value(s):
+        value = eval_id(s)
+
+        print("OOOOOOO")
+        print(value)
         if isinstance(value, (str, int, float, bytes, bool, type(None))):
             return ast.Constant(value)
+        else:
+            return value
         raise RuntimeError()
 
     class RewriteSymbolics(ast.NodeTransformer):
@@ -2031,7 +2087,7 @@ def _signature_fromstr(cls, obj, s, skip_bound_arg=True):
             return wrap_value(node.id)
 
     def p(name_node, default_node, default=empty):
-        name = parse_name(name_node)
+        name, annotation = parse_name(name_node)
         if name is invalid:
             return None
         if default_node and default_node is not _empty:
@@ -2043,7 +2099,7 @@ def _signature_fromstr(cls, obj, s, skip_bound_arg=True):
             if o is invalid:
                 return None
             default = o if o is not invalid else default
-        parameters.append(Parameter(name, kind, default=default, annotation=empty))
+        parameters.append(Parameter(name, kind, default=default, annotation=annotation))
 
     # non-keyword-only parameters
     args = reversed(f.args.args)
@@ -2135,6 +2191,8 @@ def _signature_from_function(cls, func, skip_bound_arg=True):
     positional = arg_names[:pos_count]
     keyword_only_count = func_code.co_kwonlyargcount
     keyword_only = arg_names[pos_count:pos_count + keyword_only_count]
+    print(type(func.__annotations__))
+    print(str(func.__annotations__))
     annotations = func.__annotations__
     defaults = func.__defaults__
     kwdefaults = func.__kwdefaults__

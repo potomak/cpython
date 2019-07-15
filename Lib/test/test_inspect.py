@@ -2440,6 +2440,33 @@ class TestSignatureObject(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'invalid method signature'):
             self.signature(Test())
 
+    def test_signature_on_method_with_annotations(self):
+        class Test:
+            def __init__(*args):
+                pass
+            def m1(self, arg1: int, arg2=1) -> int:
+                pass
+            def m2(*args):
+                pass
+            def __call__(*, a):
+                pass
+
+        self.assertEqual(self.signature(Test().m1),
+                         ((('arg1', ..., int, "positional_or_keyword"),
+                           ('arg2', 1, ..., "positional_or_keyword")),
+                          int))
+
+        self.assertEqual(self.signature(Test().m2),
+                         ((('args', ..., ..., "var_positional"),),
+                          ...))
+
+        self.assertEqual(self.signature(Test),
+                         ((('args', ..., ..., "var_positional"),),
+                          ...))
+
+        with self.assertRaisesRegex(ValueError, 'invalid method signature'):
+            self.signature(Test())
+
     def test_signature_wrapped_bound_method(self):
         # Issue 24298
         class Test:
@@ -3798,6 +3825,56 @@ class TestSignatureDefinitions(unittest.TestCase):
         func.__text_signature__ = '($self, a, b=1, /, *args, c, d=2, **kwargs)'
         sig = inspect.signature(func)
         self.assertEqual(str(sig), '(self, a, b=1, /, *args, c, d=2, **kwargs)')
+
+    def test_foo(self):
+        def func(*args, **kwargs):
+            pass
+
+        func.__text_signature__ = '($self, a, b=1, *args, c: int, d=2, f: str, **kwargs)'
+        sig = inspect.signature(func)
+        print(str(sig))
+
+        # Url = str
+        # func.__text_signature__ = '($self, a, b=1, *args, c: int, d=2, e: Url, f: str, **kwargs)'
+        # sig = inspect.signature(func)
+        # print(str(sig))
+
+        # func.__text_signature__ = '($self, a, b=1, *args, c: int, d=2, e: List[int], f: str, **kwargs)'
+        # sig = inspect.signature(func)
+        # print(str(sig))
+
+        from typing import List
+        def foo(a: int, aa: List[int], b: str = "foo"):
+            pass
+
+        print("SIGNATURE FOO")
+        print(inspect.signature(foo))
+
+        # def func(a: int):
+        #     pass
+        # foo = compile("def func(a: int): pass\n", "_does_not_exist", "single")
+        # # print(func.__text_signature__)
+        # print(foo.__text_signature__)
+        # sig = inspect.signature(func)
+        # self.assertIsNotNone(sig)
+
+        from textwrap import dedent
+
+        my_def = dedent("""
+        from __future__ import annotations
+        from typing import List
+        def foo(a: List[int]):
+            pass
+        """)
+
+        scope = {}
+        exec(my_def, {}, scope)
+        print("__ANNOTATIONS__")
+        print(scope['foo'].__annotations__)
+        print("INSPECT SIGNATURE")
+        print(type(scope['foo']))
+        print(inspect.signature(scope['foo']))
+        print("WOOOOOO")
 
 
 class NTimesUnwrappable:
